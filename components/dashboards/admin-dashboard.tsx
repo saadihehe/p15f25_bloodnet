@@ -21,7 +21,6 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
   const [activity, setActivity] = useState<any[]>([])
   const [pendingDonations, setPendingDonations] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [adminMode, setAdminMode] = useState(true)
 
   const loadAdminData = async () => {
       try {
@@ -237,33 +236,10 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
     { id: 3, type: 'Hospitals Registered', count: users.filter((entry) => entry.role === 'hospital').length, urgent: false },
   ]
 
-  // If not in admin mode, show donor dashboard instead
-  if (!adminMode) {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold">Donor Mode Active</h2>
-          <Button onClick={() => setAdminMode(true)} variant="outline">
-            Back to Admin
-          </Button>
-        </div>
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-muted-foreground">You're viewing as a donor. Switch back to admin to approve donations.</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-8">
-      {/* Header with Mode Toggle */}
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold">Admin Dashboard</h2>
-        <Button onClick={() => setAdminMode(false)} variant="outline">
-          View as Donor
-        </Button>
       </div>
 
       {/* KPI Cards */}

@@ -11,11 +11,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/hooks/use-toast'
 import { ArrowLeft, MessageCircle, Phone, Mail, Heart } from 'lucide-react'
 import Link from 'next/link'
+import { useAuth } from '@/components/auth-provider'
 
 export default function NotificationDetailPage() {
   const router = useRouter()
   const params = useParams()
   const { toast } = useToast()
+  const { user: authUser } = useAuth()
   const [user, setUser] = useState<any>(null)
   const [message, setMessage] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -23,11 +25,12 @@ export default function NotificationDetailPage() {
 
   useEffect(() => {
     loadUserProfile()
-  }, [params.userId])
+  }, [params.userId, authUser?.city])
 
   const loadUserProfile = async () => {
     try {
-      const res = await fetch(`/api/users/${params.userId}?city=Karachi`)
+      const city = authUser?.city || 'Karachi'
+      const res = await fetch(`/api/users/${params.userId}?city=${encodeURIComponent(city)}`)
       if (!res.ok) throw new Error('Failed to load profile')
       const data = await res.json()
       setUser(data.user)
@@ -51,7 +54,7 @@ export default function NotificationDetailPage() {
         body: JSON.stringify({
           recipientId: params.userId,
           message: message.trim(),
-          city: 'Karachi',
+          city: authUser?.city || 'Karachi',
         }),
       })
       const data = await res.json()

@@ -25,7 +25,14 @@ export async function GET(req: NextRequest) {
         createdAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() },
       }),
       donationsCollection.countDocuments({ status: 'completed' }),
-      donationsCollection.countDocuments({ status: 'receiver_confirmed' }),
+      donationsCollection.countDocuments({
+        status: { $nin: ['completed', 'rejected'] },
+        recipientConfirmed: true,
+        $or: [
+          { donorConfirmed: true },
+          { status: { $in: ['submitted', 'receiver_confirmed'] } },
+        ],
+      }),
     ])
 
     const donorUsers = await usersCollection.find({ role: 'donor' }).project({ lastDonationDate: 1 }).toArray()

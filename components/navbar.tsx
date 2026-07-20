@@ -36,14 +36,16 @@ export function Navbar() {
     return () => clearInterval(interval)
   }, [user])
 
-  const navItems = [
-    { href: "/", label: "Home" },
-    { href: "/register-donor", label: "Become a Donor" },
-    { href: "/request-blood", label: "Request Blood" },
-    { href: "/donors", label: "Find Donors" },
-    ...(user ? [{ href: "/dashboard", label: "Dashboard" }] : []),
-    { href: "/help", label: "Help" },
-  ]
+  const navItems = user?.role === 'admin'
+    ? [{ href: "/admin/dashboard", label: "Dashboard" }]
+    : [
+        { href: "/", label: "Home" },
+        ...(user?.role === 'donor' || !user ? [{ href: "/register-donor", label: "Become a Donor" }] : []),
+        ...(user?.role === 'receiver' || user?.role === 'hospital' || !user ? [{ href: "/request-blood", label: "Request Blood" }] : []),
+        { href: "/donors", label: "Find Donors" },
+        ...(user ? [{ href: "/dashboard", label: "Dashboard" }] : []),
+        { href: "/help", label: "Help" },
+      ]
 
   return (
     <nav className="sticky top-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

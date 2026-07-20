@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ObjectId } from 'mongodb'
 import { DB_KARACHI, DB_PAKISTAN, getDbNameForCity, isKarachi } from '@/lib/db-config'
 import { mapKarachiDonorDoc, mapMongoUserToDonor } from '@/lib/mappers'
+import { getCompatibleDonorBloodGroups } from '@/lib/blood-compatibility'
+import { getEligibilityStatus } from '@/lib/mappers'
 import { getDb } from '@/lib/mongodb'
+import { isValidEmail, isValidPakistaniPhone, normalizePakistaniPhone } from '@/lib/validation-utils'
 import type { MongoUser } from '@/lib/types'
 
 export async function GET(req: NextRequest) {
@@ -11,6 +14,8 @@ export async function GET(req: NextRequest) {
     const city = searchParams.get('city') || 'Karachi'
     const bloodGroup = searchParams.get('bloodGroup')
     const availableOnly = searchParams.get('available') !== 'false'
+    const compatibleBloodGroups = bloodGroup ? getCompatibleDonorBloodGroups(bloodGroup) : []
+    const bloodGroupFilter = compatibleBloodGroups.length ? { $in: compatibleBloodGroups } : bloodGroup
 
     let donors: any[] = []
 
@@ -19,30 +24,36 @@ export async function GET(req: NextRequest) {
       
       // Query donors collection
       const donorFilter: Record<string, unknown> = { city }
-      if (bloodGroup) donorFilter.bloodGroup = bloodGroup
+      if (bloodGroup) donorFilter.bloodGroup = bloodGroupFilter
       if (availableOnly) donorFilter.available = true
       
       const donorDocs = await db.collection('donors').find(donorFilter).toArray()
-      const donorsFromCollection = donorDocs.map((doc) => mapKarachiDonorDoc(doc))
+      const donorsFromCollection = donorDocs
+        .filter((doc) => getEligibilityStatus(String(doc.lastDonationDate || '')) === 'eligible')
+        .map((doc) => mapKarachiDonorDoc(doc))
       
       // Query users collection (role='donor')
       const userFilter: Record<string, unknown> = { role: 'donor', city }
-      if (bloodGroup) userFilter.bloodGroup = bloodGroup
+      if (bloodGroup) userFilter.bloodGroup = bloodGroupFilter
       if (availableOnly) userFilter.availability = true  // FIX: Use correct field name
       
       const userDocs = await db.collection<MongoUser>('users').find(userFilter).toArray()
-      const donorsFromUsers = userDocs.map((user, index) => mapMongoUserToDonor(user, index))
+      const donorsFromUsers = userDocs
+        .filter((user) => getEligibilityStatus(user.lastDonationDate) === 'eligible')
+        .map((user, index) => mapMongoUserToDonor(user, index))
 
       donors = [...donorsFromCollection, ...donorsFromUsers]
     } else {
       const db = await getDb(DB_PAKISTAN)
       
       const userFilter: Record<string, unknown> = { role: 'donor', city }
-      if (bloodGroup) userFilter.bloodGroup = bloodGroup
+      if (bloodGroup) userFilter.bloodGroup = bloodGroupFilter
       if (availableOnly) userFilter.availability = true  // FIX: Use correct field name
       
       const users = await db.collection<MongoUser>('users').find(userFilter).toArray()
-      donors = users.map((user, index) => mapMongoUserToDonor(user, index))
+      donors = users
+        .filter((user) => getEligibilityStatus(user.lastDonationDate) === 'eligible')
+        .map((user, index) => mapMongoUserToDonor(user, index))
     }
 
     return NextResponse.json({
@@ -66,6 +77,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Blood type, city, phone, availability, and contact details are required' }, { status: 400 })
     }
 
+    if (!isValidEmail(email)) {
+      return NextResponse.json({ error: 'Please enter a valid email address' }, { status: 400 })
+    }
+
+    const normalizedPhone = normalizePakistaniPhone(phone)
+    if (!isValidPakistaniPhone(normalizedPhone)) {
+      return NextResponse.json({ error: 'Phone number must be a valid Pakistani number in format +92xxxxxxxxxx' }, { status: 400 })
+    }
+
     const dbName = getDbNameForCity(city)
     const db = await getDb(dbName)
     const users = db.collection<Partial<MongoUser>>('users')
@@ -75,7 +95,7 @@ export async function POST(req: NextRequest) {
     const donorProfile: NewUserProfile = {
       name,
       email: email.toLowerCase(),
-      phone,
+      phone: normalizedPhone,
       city,
       bloodGroup,
       lastDonationDate: lastDonationDate || undefined,

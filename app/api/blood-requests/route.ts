@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth'
 import { getDbNameForCity } from '@/lib/db-config'
 import { getDb } from '@/lib/mongodb'
 import { createBloodRequest, donorAcceptsRequest } from '@/lib/fulfillment-service'
+import { isValidPakistaniPhone, normalizePakistaniPhone } from '@/lib/validation-utils'
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
       city = 'Karachi',
       hospitalName,
       reason,
+      contactNumber,
       selectedDonorId,
       selectedDonorEmail,
       selectedDonorName,
@@ -36,12 +38,17 @@ export async function POST(req: NextRequest) {
 
     // Map old fields to new format
     const finalBloodGroup = bloodGroup || body.bloodGroup
-    const finalUnits = units || unitsRequired
-    const finalUrgency = urgency || (urgencyLevel === 'emergency' ? 'emergency' : 'normal')
+    const finalUnits = Number(units || unitsRequired || 1)
+    const finalUrgency = urgency || (urgencyLevel === 'emergency' ? 'emergency' : urgencyLevel === 'urgent' ? 'urgent' : 'normal')
     const finalName = requesterName || patientName
+    const finalContactNumber = normalizePakistaniPhone(contactNumber || auth.user.phone)
 
     if (!requesterId || !finalBloodGroup || !finalUnits || !finalUrgency) {
       return NextResponse.json({ error: 'Missing required request fields' }, { status: 400 })
+    }
+
+    if (!isValidPakistaniPhone(finalContactNumber)) {
+      return NextResponse.json({ error: 'Contact number must be a valid Pakistani number in format +92xxxxxxxxxx' }, { status: 400 })
     }
 
     const request = await createBloodRequest(
@@ -54,7 +61,8 @@ export async function POST(req: NextRequest) {
       finalUrgency,
       city,
       hospitalName,
-      reason
+      reason,
+      finalContactNumber
     )
 
     // Ensure request has an `id` property for callers

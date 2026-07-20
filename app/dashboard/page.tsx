@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAuth } from '@/components/auth-provider'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import DonorDashboard from '@/components/dashboards/donor-dashboard'
 import ReceiverDashboard from '@/components/dashboards/receiver-dashboard'
 import HospitalDashboard from '@/components/dashboards/hospital-dashboard'
@@ -16,29 +16,16 @@ import Link from 'next/link'
 export default function DashboardPage() {
   const { user, logout, isLoading } = useAuth()
   const router = useRouter()
-  const [isHydrating, setIsHydrating] = useState(true)
 
   useEffect(() => {
-    setIsHydrating(true)
-  }, [isLoading])
-
-  useEffect(() => {
-    // Give auth provider time to hydrate from cookie
-    const hydrationTimeout = setTimeout(() => {
-      setIsHydrating(false)
-    }, 500)
-    return () => clearTimeout(hydrationTimeout)
-  }, [])
-
-  useEffect(() => {
-    if (!isHydrating) {
+    if (!isLoading) {
       if (!user) {
         router.push('/login')
       } else if (user.role === 'admin') {
         router.push('/admin/dashboard')
       }
     }
-  }, [user, router, isHydrating])
+  }, [user, router, isLoading])
 
   // Map new role system to appropriate dashboard
   const getDashboardComponent = () => {
@@ -54,7 +41,7 @@ export default function DashboardPage() {
     }
   }
 
-  if (isHydrating || !user) {
+  if (isLoading || !user) {
     return (
       <>
         <Navbar />
@@ -62,7 +49,7 @@ export default function DashboardPage() {
           <div className="mx-auto w-full max-w-md">
             <Card>
               <CardContent className="pt-6 sm:pt-8 text-center">
-                {isHydrating ? (
+                {isLoading ? (
                   <>
                     <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 text-blue-600 mx-auto mb-4 animate-pulse">
                       <Heart className="h-6 w-6" />

@@ -17,6 +17,8 @@ interface BloodRequest {
   status: string
   acceptedDonorName?: string
   acceptedDonorEmail?: string
+  acceptedDonorPhone?: string
+  donationId?: string
   createdAt: string
   estimatedDeliveryTime?: string
   deliveredAt?: string
@@ -227,7 +229,7 @@ export default function ReceiverDashboard({ user }: { user: User }) {
                   {donations.map((donation) => {
                     const flow = getDonationFlowState(
                       donation.status || 'pending',
-                      Boolean(donation.status === 'submitted' || donation.status === 'receiver_confirmed' || donation.status === 'completed'),
+                      Boolean(donation.donorConfirmed || donation.status === 'submitted' || donation.status === 'receiver_confirmed' || donation.status === 'completed'),
                       Boolean(donation.recipientConfirmed || donation.status === 'receiver_confirmed' || donation.status === 'completed')
                     )
 
@@ -242,7 +244,7 @@ export default function ReceiverDashboard({ user }: { user: User }) {
                         </div>
                         {flow.canConfirmReceiver && (
                           <Button size="sm" onClick={() => void handleConfirmReceipt(donation.id)}>
-                            Confirm Receipt
+                            Confirm Blood Received
                           </Button>
                         )}
                       </div>
@@ -285,7 +287,12 @@ export default function ReceiverDashboard({ user }: { user: User }) {
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              window.open(`https://wa.me/${req.acceptedDonorEmail}?text=Hi%20${req.acceptedDonorName}%2C%20thanks%20for%20helping%20with%20blood%20donation`, '_blank')
+                              const donorPhone = req.acceptedDonorPhone?.replace(/[^0-9]/g, '')
+                              if (!donorPhone) {
+                                toast({ title: 'No phone number', description: 'Donor phone number is not available yet.', variant: 'destructive' })
+                                return
+                              }
+                              window.open(`https://wa.me/${donorPhone}?text=Hi%20${req.acceptedDonorName}%2C%20thanks%20for%20helping%20with%20blood%20donation`, '_blank')
                             }}
                             className="w-full"
                           >
@@ -294,7 +301,7 @@ export default function ReceiverDashboard({ user }: { user: User }) {
                         </div>
                       </div>
                       {(() => {
-                        const flow = getDonationFlowState(req.status, true, false)
+                        const flow = getDonationFlowState(req.status, false, false)
                         return (
                           <div className="mt-3 rounded-md border border-blue-200 bg-white/70 p-3 text-sm text-blue-900">
                             <p className="font-semibold">{flow.label}</p>

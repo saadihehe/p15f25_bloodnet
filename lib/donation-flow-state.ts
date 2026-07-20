@@ -16,7 +16,17 @@ export function getDonationFlowState(
   if (!donorConfirmed && !receiverConfirmed) {
     return {
       status: 'awaiting-donor-confirmation',
-      label: 'Waiting for donor confirmation',
+      label: 'Waiting for both confirmations',
+      canConfirmDonor: true,
+      canConfirmReceiver: true,
+      canApprove: false,
+    }
+  }
+
+  if (!donorConfirmed && receiverConfirmed) {
+    return {
+      status: 'awaiting-donor-confirmation',
+      label: 'Receiver confirmed. Waiting for donor confirmation',
       canConfirmDonor: true,
       canConfirmReceiver: false,
       canApprove: false,

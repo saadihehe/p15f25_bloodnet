@@ -59,8 +59,12 @@ export async function GET(req: NextRequest) {
       id: d._id.toString(),
       donorId: d.donorId,
       donorName: d.donorName,
+      donorEmail: d.donorEmail,
+      donorConfirmed: d.donorConfirmed ?? false,
+      donorConfirmedDate: d.donorConfirmedDate,
       recipientId: d.recipientId,
       recipientName: d.recipientName,
+      recipientEmail: d.recipientEmail,
       bloodGroup: d.bloodGroup,
       units: d.units,
       status: d.status,
@@ -76,6 +80,7 @@ export async function GET(req: NextRequest) {
       certificateGenerated: d.certificateGenerated ?? false,
       certificateUrl: d.certificateUrl,
       certificateId: d.certificateId,
+      requestId: d.requestId,
       city: d.city,
     }))
 
@@ -92,7 +97,19 @@ export async function POST(req: NextRequest) {
     if (auth.response) return auth.response
 
     const body = await req.json()
-    const { donorId, donorName, recipientId, recipientName, bloodGroup, units, city = 'Karachi' } = body
+    const {
+      donorId,
+      donorName,
+      donorEmail,
+      recipientId,
+      recipientName,
+      recipientEmail,
+      bloodGroup,
+      units,
+      city = 'Karachi',
+      hospitalName,
+      requestId,
+    } = body
 
     if (!donorId || !donorName || !bloodGroup || !units) {
       return NextResponse.json({ error: 'Missing required donation fields' }, { status: 400 })
@@ -106,7 +123,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Receivers may only register donations for their own request' }, { status: 403 })
     }
 
-    const donation = await createDonationRecord({ donorId, donorName, recipientId, recipientName, bloodGroup, units, city })
+    const donation = await createDonationRecord({
+      donorId,
+      donorName,
+      donorEmail,
+      recipientId,
+      recipientName,
+      recipientEmail,
+      bloodGroup,
+      units: Number(units),
+      city,
+      hospitalName,
+      requestId,
+    })
     return NextResponse.json({ success: true, donation }, { status: 201 })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Donation creation failed'

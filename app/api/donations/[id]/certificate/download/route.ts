@@ -31,7 +31,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
     }
 
     // Try to serve the certificate file if it exists locally
-    const certificatePath = path.join(process.cwd(), 'public', donation.certificateUrl.replace('/certificates/', ''))
+    const certificatePath = path.join(process.cwd(), 'public', donation.certificateUrl.replace(/^\//, ''))
     
     if (fs.existsSync(certificatePath)) {
       const fileBuffer = fs.readFileSync(certificatePath)

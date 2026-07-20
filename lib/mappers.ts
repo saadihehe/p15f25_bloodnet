@@ -31,7 +31,7 @@ export function getEligibilityStatus(lastDonationDate?: string): 'eligible' | 'n
   const lastDonation = new Date(lastDonationDate)
   const now = new Date()
   const diffDays = (now.getTime() - lastDonation.getTime()) / (1000 * 60 * 60 * 24)
-  return diffDays <= 90 ? 'not_eligible' : 'eligible'
+  return diffDays < 90 ? 'not_eligible' : 'eligible'
 }
 
 export function mapMongoUserToAppUser(user: MongoUser): AppUser {

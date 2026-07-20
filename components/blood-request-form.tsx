@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { isValidPakistaniPhone, normalizePakistaniPhone } from "@/lib/validation-utils"
 
 interface BloodRequestFormProps {
   onSuccess?: (data: any) => void
@@ -54,6 +55,7 @@ export function BloodRequestForm({ onSuccess }: BloodRequestFormProps) {
     if (!formData.city) newErrors.city = "City is required"
     if (!formData.hospital.trim()) newErrors.hospital = "Hospital name is required"
     if (!formData.contact) newErrors.contact = "Contact number is required"
+    else if (!isValidPakistaniPhone(normalizePakistaniPhone(formData.contact))) newErrors.contact = "Enter a valid Pakistani phone number"
     if (!formData.units || Number.parseInt(formData.units) < 1) newErrors.units = "Must request at least 1 unit"
 
     setErrors(newErrors)

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { isValidPakistaniPhone, normalizePakistaniPhone } from "@/lib/validation-utils"
 
 interface DonorFormProps {
   onSuccess?: () => void
@@ -45,6 +46,7 @@ export function DonorForm({ onSuccess }: DonorFormProps) {
     if (!formData.bloodGroup) newErrors.bloodGroup = "Blood group is required"
     if (!formData.city) newErrors.city = "City is required"
     if (!formData.contact) newErrors.contact = "Contact number is required"
+    else if (!isValidPakistaniPhone(normalizePakistaniPhone(formData.contact))) newErrors.contact = "Enter a valid Pakistani phone number"
     if (!formData.lastDonationDate) newErrors.lastDonationDate = "Last donation date is required"
 
     setErrors(newErrors)

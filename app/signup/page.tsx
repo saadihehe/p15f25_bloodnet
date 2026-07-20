@@ -10,9 +10,11 @@ import { Footer } from '@/components/footer'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuth, type UserRole } from '@/components/auth-provider'
 import { Heart } from 'lucide-react'
+import { isValidEmail, isValidPakistaniPhone, normalizePakistaniPhone, validateSignupInput } from '@/lib/validation-utils'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -23,6 +25,7 @@ export default function SignupPage() {
   const [bloodGroup, setBloodGroup] = useState('')
   const [emailSentTo, setEmailSentTo] = useState('')
   const [isSignedUp, setIsSignedUp] = useState(false)
+  const [acceptedContactConsent, setAcceptedContactConsent] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -63,15 +66,13 @@ export default function SignupPage() {
       return
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email.trim())) {
+    if (!isValidEmail(formData.email)) {
       setError('Please enter a valid email address')
       return
     }
 
-    const phoneRegex = /^\+92[0-9]{10}$/
-    const normalizedPhone = formData.phone.trim().replace(/\s+/g, '')
-    if (!phoneRegex.test(normalizedPhone)) {
+    const normalizedPhone = normalizePakistaniPhone(formData.phone)
+    if (!isValidPakistaniPhone(normalizedPhone)) {
       setError('Phone number must be a valid Pakistani number in format +92xxxxxxxxxx')
       return
     }
@@ -83,6 +84,25 @@ export default function SignupPage() {
 
     if ((role === 'donor' || role === 'receiver') && !bloodGroup) {
       setError('Please select your blood group')
+      return
+    }
+
+    if (!acceptedContactConsent) {
+      setError('Please accept the contact-sharing consent before creating your account')
+      return
+    }
+
+    const validation = validateSignupInput({
+      name: formData.name,
+      email: formData.email,
+      password: formData.password,
+      phone: normalizedPhone,
+      role,
+      city: city || 'Karachi',
+      bloodGroup,
+    })
+    if (!validation.isValid) {
+      setError(validation.errors[0])
       return
     }
 
@@ -276,6 +296,17 @@ export default function SignupPage() {
                           />
                         </div>
 
+                        <label className="flex items-start gap-3 rounded-lg border border-border p-3 text-sm">
+                          <Checkbox
+                            checked={acceptedContactConsent}
+                            onCheckedChange={(checked) => setAcceptedContactConsent(checked === true)}
+                            className="mt-0.5"
+                          />
+                          <span className="leading-relaxed text-muted-foreground">
+                            I agree that BloodNet may share my phone number with matched donors, receivers, hospitals, and admins for donation coordination.
+                          </span>
+                        </label>
+
                         <div className="flex gap-3">
                           <Button
                             type="button"
@@ -285,7 +316,7 @@ export default function SignupPage() {
                           >
                             Back
                           </Button>
-                          <Button type="submit" className="flex-1" disabled={isLoading}>
+                          <Button type="submit" className="flex-1" disabled={isLoading || !acceptedContactConsent}>
                             {isLoading ? 'Creating...' : 'Create Account'}
                           </Button>
                         </div>

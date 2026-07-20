@@ -11,8 +11,24 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 export default function AdminPage() {
-  const { user } = useAuth()
+  const { user, isLoading } = useAuth()
   const router = useRouter()
+
+  if (isLoading) {
+    return (
+      <>
+        <Navbar />
+        <main className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
+          <Card className="max-w-md w-full">
+            <CardContent className="pt-8 sm:pt-12 pb-8 sm:pb-12 text-center">
+              <p className="text-muted-foreground">Loading admin session...</p>
+            </CardContent>
+          </Card>
+        </main>
+        <Footer />
+      </>
+    )
+  }
 
   // Check if user is admin
   if (!user) {

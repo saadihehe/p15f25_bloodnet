@@ -14,7 +14,15 @@ export async function GET(req: NextRequest) {
     const dbName = getDbNameForCity(city)
     const db = await getDb(dbName)
 
-    const query = { recipientEmail: auth.user.email.toLowerCase() }
+    const userId = auth.user._id.toString()
+    const recipientMatchers: Record<string, unknown>[] = [
+      { recipientEmail: auth.user.email.toLowerCase() },
+      { recipientId: userId },
+    ]
+    if (ObjectId.isValid(userId)) {
+      recipientMatchers.push({ recipientId: auth.user._id })
+    }
+    const query = { $or: recipientMatchers }
     
     const docs = await db
       .collection('notifications')
@@ -29,8 +37,12 @@ export async function GET(req: NextRequest) {
       title: n.title,
       message: n.message,
       timestamp: n.timestamp ?? 'Just now',
+      createdAt: n.createdAt,
       read: n.read ?? false,
       actionUrl: n.actionUrl,
+      actionLabel: n.actionLabel,
+      senderId: n.senderId?.toString?.() || n.senderId || n.data?.donorId || n.data?.requesterId || '',
+      senderName: n.senderName || n.data?.donorName || n.data?.requesterName || n.title || 'BloodNet',
     }))
 
     return NextResponse.json({
@@ -55,7 +67,15 @@ export async function PUT(req: NextRequest) {
     const db = await getDb(dbName)
     const collection = db.collection('notifications')
 
-    const userQuery = { recipientEmail: auth.user.email.toLowerCase() }
+    const userId = auth.user._id.toString()
+    const recipientMatchers: Record<string, unknown>[] = [
+      { recipientEmail: auth.user.email.toLowerCase() },
+      { recipientId: userId },
+    ]
+    if (ObjectId.isValid(userId)) {
+      recipientMatchers.push({ recipientId: auth.user._id })
+    }
+    const userQuery = { $or: recipientMatchers }
 
     if (action === 'mark-as-read' && notificationId) {
       await collection.updateOne(
@@ -92,7 +112,12 @@ export async function PUT(req: NextRequest) {
       if (!notification.recipientEmail && !notification.recipientId) {
         return NextResponse.json({ error: 'Notification must specify recipient' }, { status: 400 })
       }
-      await collection.insertOne({ ...notification, createdAt: new Date().toISOString() })
+      await collection.insertOne({
+        ...notification,
+        read: notification.read ?? false,
+        city,
+        createdAt: notification.createdAt || new Date().toISOString(),
+      })
       return NextResponse.json({ success: true, notification })
     }
 

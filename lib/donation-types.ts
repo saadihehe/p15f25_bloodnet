@@ -13,8 +13,12 @@ export interface DonationRecord {
   id: string
   donorId: string
   donorName: string
+  donorEmail?: string
+  donorConfirmed?: boolean
+  donorConfirmedDate?: string
   recipientId?: string
   recipientName?: string
+  recipientEmail?: string
   bloodGroup: string
   units: number
   status: DonationStatus
@@ -35,6 +39,7 @@ export interface DonationRecord {
   certificateGenerated?: boolean
   certificateUrl?: string
   certificateId?: string
+  requestId?: string
   city?: string
   createdAt?: string
 }

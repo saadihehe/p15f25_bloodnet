@@ -13,9 +13,17 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const city = req.nextUrl.searchParams.get('city') || 'Karachi'
     const dbName = getDbNameForCity(city)
     const db = await getDb(dbName)
+    const userId = auth.user._id.toString()
+    const recipientMatchers: Record<string, unknown>[] = [
+      { recipientId: userId },
+      { recipientEmail: auth.user.email.toLowerCase() },
+    ]
+    if (ObjectId.isValid(userId)) {
+      recipientMatchers.push({ recipientId: auth.user._id })
+    }
 
     const result = await db.collection('notifications').updateOne(
-      { _id: new ObjectId(params.id), recipientId: auth.user._id },
+      { _id: new ObjectId(params.id), $or: recipientMatchers },
       { $set: { read: true, updatedAt: new Date().toISOString() } }
     )
 

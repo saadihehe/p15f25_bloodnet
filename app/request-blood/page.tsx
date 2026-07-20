@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/hooks/use-toast'
 import { BloodRequestLoadingAnimation } from '@/components/blood-request-loading'
 import { BloodRequestSuccessModal } from '@/components/blood-request-success-modal'
+import { isValidPakistaniPhone, normalizePakistaniPhone } from '@/lib/validation-utils'
 
 const DonorsMap = dynamic(() => import('@/components/donors-map').then(mod => ({ default: mod.DonorsMap })), {
   ssr: false,
@@ -139,6 +140,15 @@ interface SelectedDonor {
   verified: boolean
 }
 
+interface UrgentHospital {
+  id: string
+  name: string
+  address: string
+  phone: string
+  bloodBankAvailability: string
+  city: string
+}
+
 const pakistaniCities = ['Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'Multan', 'Peshawar', 'Quetta']
 const bloodGroups = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-']
 
@@ -152,6 +162,9 @@ export default function RequestBloodPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
   const [successData, setSuccessData] = useState<{ donorName: string; bloodType: string; units: number } | null>(null)
+  const [createdRequest, setCreatedRequest] = useState<any | null>(null)
+  const [urgentHospitals, setUrgentHospitals] = useState<UrgentHospital[]>([])
+  const [emergencyMessage, setEmergencyMessage] = useState('')
   const [formData, setFormData] = useState<RequestData>({
     patientName: '',
     bloodGroup: '',
@@ -199,14 +212,50 @@ export default function RequestBloodPage() {
 
   const handleStage1Submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.bloodGroup || !formData.patientName || !formData.hospitalName) {
+    if (!formData.bloodGroup || !formData.patientName || !formData.hospitalName || !formData.contactNumber) {
       toast({ title: 'Missing fields', description: 'Please fill in all required fields', variant: 'destructive' })
+      return
+    }
+
+    const normalizedContactNumber = normalizePakistaniPhone(formData.contactNumber)
+    if (!isValidPakistaniPhone(normalizedContactNumber)) {
+      toast({ title: 'Invalid phone number', description: 'Enter a valid Pakistani phone number in +92xxxxxxxxxx format.', variant: 'destructive' })
       return
     }
     
     setIsLoading(true)
     
     try {
+      if (formData.urgencyLevel === 'emergency') {
+        if (!user) {
+          toast({ title: 'Login required', description: 'Please log in so nearby hospitals can see your emergency request.', variant: 'destructive' })
+          return
+        }
+
+        const urgentRes = await fetch('/api/requests/urgent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            city: formData.city,
+            bloodGroup: formData.bloodGroup,
+            units: Number(formData.unitsRequired || 1),
+            receiverId: user.id,
+            receiverName: user.name,
+          }),
+        })
+        const urgentPayload = await urgentRes.json()
+        if (!urgentRes.ok || !urgentPayload.success) {
+          throw new Error(urgentPayload.error || 'Failed to create emergency request')
+        }
+
+        setUrgentHospitals(urgentPayload.hospitals || [])
+        setEmergencyMessage('Emergency case: please go to the nearest listed hospital immediately. Donor matching can continue later, but hospital care comes first.')
+        setFilteredDonors([])
+        setRecommendedDonors([])
+        setStage(2)
+        return
+      }
+
       const res = await fetch(`/api/donors?city=${encodeURIComponent(formData.city)}&bloodGroup=${encodeURIComponent(formData.bloodGroup)}`)
       const data = await res.json()
       const dbDonors = data.donors ?? []
@@ -246,69 +295,68 @@ export default function RequestBloodPage() {
 
   const handleDonorSelect = (donor: SelectedDonor) => {
     setSelectedDonor(donor)
+    setCreatedRequest(null)
     setStage(3)
   }
 
-  const handleFinalSubmit = async () => {
+  const createRequestForSelectedDonor = async () => {
     if (!selectedDonor) {
-      toast({ title: 'No donor selected', description: 'Please select a donor before confirming', variant: 'destructive' })
-      return
+      throw new Error('Please select a donor before confirming')
     }
 
+    if (!user) {
+      throw new Error('Please log in to contact donors or confirm requests')
+    }
+
+    if (createdRequest) return createdRequest
+
+    const normalizedContactNumber = normalizePakistaniPhone(formData.contactNumber)
+    if (!isValidPakistaniPhone(normalizedContactNumber)) {
+      throw new Error('Enter a valid Pakistani phone number in +92xxxxxxxxxx format.')
+    }
+
+    const response = await fetch('/api/blood-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patientName: formData.patientName,
+        bloodGroup: formData.bloodGroup,
+        hospitalName: formData.hospitalName,
+        hospitalAddress: formData.hospitalAddress,
+        urgencyLevel: formData.urgencyLevel,
+        unitsRequired: formData.unitsRequired,
+        contactNumber: normalizedContactNumber,
+        selectedDonorId: selectedDonor.id,
+        selectedDonorEmail: selectedDonor.email,
+        selectedDonorName: selectedDonor.name,
+      }),
+    })
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: 'Request failed' }))
+      throw new Error(err?.error || 'Failed to create request')
+    }
+
+    const data = await response.json()
+    setCreatedRequest(data)
+    return data
+  }
+
+  const handleFinalSubmit = async () => {
     try {
-      // Send blood request to API
-      const response = await fetch('/api/blood-requests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patientName: formData.patientName,
-          bloodGroup: formData.bloodGroup,
-          hospitalName: formData.hospitalName,
-          hospitalAddress: formData.hospitalAddress,
-          urgencyLevel: formData.urgencyLevel,
-          unitsRequired: formData.unitsRequired,
-          contactNumber: formData.contactNumber,
-          selectedDonorId: selectedDonor.id,
-          selectedDonorEmail: selectedDonor.email,
-          selectedDonorName: selectedDonor.name,
-          requesterId: user?.id || 'hospital-request',
-        }),
-      })
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ error: 'Request failed' }))
-        console.error('[v0] Request failed:', err)
-        toast({ title: 'Request failed', description: err?.error || 'Failed to create request', variant: 'destructive' })
-        return
-      }
-
-      const data = await response.json()
+      const data = await createRequestForSelectedDonor()
       console.log('[v0] Blood request created:', data)
-
       // Show success modal with donor details
       setSuccessData({
-        donorName: selectedDonor.name,
+        donorName: selectedDonor?.name || 'the donor',
         bloodType: formData.bloodGroup,
         units: parseInt(formData.unitsRequired),
       })
       setShowSuccessModal(true)
-
-      // If API returned a notification payload, forward it to notifications service
-      if (data?.notification) {
-        await fetch('/api/notifications', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'add-notification',
-            notification: data.notification,
-          }),
-        }).catch((e) => console.warn('Failed to forward notification:', e))
-      }
-
-      toast({ title: 'Request sent', description: `Request sent to ${selectedDonor.name}. All donors have been notified.`, variant: 'default' })
+      toast({ title: 'Request sent', description: `Request sent to ${selectedDonor?.name}. The donor has been notified.`, variant: 'default' })
     } catch (error) {
       console.error('[v0] Error submitting blood request:', error)
-      toast({ title: 'Request error', description: 'Error sending request. Please try again.', variant: 'destructive' })
+      toast({ title: 'Request error', description: error instanceof Error ? error.message : 'Error sending request. Please try again.', variant: 'destructive' })
       return
     }
 
@@ -328,6 +376,29 @@ export default function RequestBloodPage() {
     })
     setSelectedDonor(null)
     setFilteredDonors([])
+    setCreatedRequest(null)
+  }
+
+  const handleContactSelectedDonor = async (mode: 'call' | 'whatsapp') => {
+    if (!selectedDonor) return
+    if (!user) {
+      toast({ title: 'Login required', description: 'Please log in to contact donors or confirm requests', variant: 'default' })
+      return
+    }
+
+    try {
+      await createRequestForSelectedDonor()
+      const phone = selectedDonor.phone.replace(/[^0-9]/g, '')
+      if (mode === 'call') {
+        window.location.href = `tel:${selectedDonor.phone}`
+      } else {
+        const message = `Hi ${selectedDonor.name}, I need ${formData.unitsRequired} unit(s) of ${formData.bloodGroup} blood at ${formData.hospitalName}.`
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
+      }
+      toast({ title: 'Donor notified', description: 'The donor will see this match on their dashboard and notifications.', variant: 'default' })
+    } catch (error) {
+      toast({ title: 'Contact failed', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' })
+    }
   }
 
   const handleEmergencyAlert = () => {
@@ -659,6 +730,63 @@ export default function RequestBloodPage() {
           {/* Stage 2: Find Donors with Recommendations */}
           {stage === 2 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4" style={{ animationFillMode: 'both' }}>
+              {emergencyMessage && (
+                <Card className="border-2 border-red-300 bg-red-50 dark:bg-red-950/20 dark:border-red-900">
+                  <CardContent className="pt-6 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-6 w-6 text-red-600 mt-1" />
+                      <div>
+                        <h2 className="text-xl font-bold text-red-900 dark:text-red-100">Go to a Hospital Now</h2>
+                        <p className="text-sm text-red-800 dark:text-red-200 mt-1">{emergencyMessage}</p>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {urgentHospitals.map((hospital) => (
+                        <div key={hospital.id} className="rounded-lg border border-red-200 bg-white p-4 text-sm dark:bg-slate-950 dark:border-red-900/40">
+                          <p className="font-semibold">{hospital.name}</p>
+                          <p className="text-muted-foreground mt-1">{hospital.address}</p>
+                          <p className="text-muted-foreground mt-1">{hospital.bloodBankAvailability}</p>
+                          <div className="mt-3 flex gap-2">
+                            <a href={`tel:${hospital.phone}`} className="inline-flex flex-1 items-center justify-center rounded-md bg-red-600 px-3 py-2 text-white">
+                              Call
+                            </a>
+                            <a
+                              href={`https://wa.me/${hospital.phone.replace(/[^0-9]/g, '')}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex flex-1 items-center justify-center rounded-md border border-red-300 px-3 py-2 text-red-700 dark:text-red-200"
+                            >
+                              WhatsApp
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="bg-transparent"
+                      onClick={() => {
+                        setEmergencyMessage('')
+                        setUrgentHospitals([])
+                        setStage(1)
+                      }}
+                    >
+                      Back to Request
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!emergencyMessage && formData.urgencyLevel === 'urgent' && (
+                <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-900">
+                  <CardContent className="pt-4 text-sm text-orange-900 dark:text-orange-100">
+                    Urgent request: donor contact details are shown after you select a donor. Keep the hospital name, address, and patient contact ready before calling.
+                  </CardContent>
+                </Card>
+              )}
+
+              {!emergencyMessage && (
+              <>
               {/* Hospital Emergency Alert Button */}
               {user && user.role === 'hospital' && (
                 <Card className={`border-2 ${showEmergencyAlert ? 'border-red-500 bg-red-50 dark:bg-red-950/30' : 'border-red-300 bg-red-50/50 dark:bg-red-950/20'}`}>
@@ -706,10 +834,7 @@ export default function RequestBloodPage() {
                             {recommendedDonors.map((rec, idx) => (
                               <div
                                 key={rec.donor.id}
-                                onClick={() => {
-                                  setSelectedDonor(rec.donor)
-                                  setStage(3)
-                                }}
+                                onClick={() => handleDonorSelect(rec.donor)}
                                 className="bg-white dark:bg-slate-900 p-3 rounded-lg border-2 border-primary/50 hover:border-primary cursor-pointer transition-all hover:shadow-md hover:-translate-y-1"
                               >
                                 <div className="flex items-start justify-between mb-2">
@@ -765,8 +890,7 @@ export default function RequestBloodPage() {
                               onMouseEnter={() => setHoveredDonor(donor)}
                               onMouseLeave={() => setHoveredDonor(null)}
                               onClick={() => {
-                                setSelectedDonor(donor)
-                                setStage(3)
+                                handleDonorSelect(donor)
                               }}
                               className={`p-4 border rounded-lg cursor-pointer transition-all ${
                                 hoveredDonor?.id === donor.id
@@ -831,8 +955,7 @@ export default function RequestBloodPage() {
                         selectedDonor={selectedDonor?.id}
                         onDonorHover={(donor) => setHoveredDonor(donor as SelectedDonor)}
                         onDonorSelect={(donor) => {
-                          setSelectedDonor(donor as SelectedDonor)
-                          setStage(3)
+                          handleDonorSelect(donor as SelectedDonor)
                         }}
                         userLocation={{ lat: 24.8607, lng: 67.0011 }}
                       />
@@ -843,6 +966,8 @@ export default function RequestBloodPage() {
                   </CardContent>
                 </Card>
               </div>
+              </>
+              )}
             </div>
           )}
 
@@ -896,18 +1021,20 @@ export default function RequestBloodPage() {
                         </h4>
                         {user ? (
                           <>
-                            <a
-                              href={`tel:${selectedDonor.phone}`}
+                            <button
+                              type="button"
+                              onClick={() => void handleContactSelectedDonor('call')}
                               className="block w-full py-3 px-4 bg-primary text-white font-semibold rounded-lg hover:bg-primary/90 text-center transition-all"
                             >
                               Call Now
-                            </a>
-                            <a
-                              href={`https://wa.me/${selectedDonor.phone.replace(/[^0-9]/g, '')}`}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleContactSelectedDonor('whatsapp')}
                               className="block w-full py-3 px-4 mt-3 border border-primary text-primary font-semibold rounded-lg hover:bg-primary/10 text-center transition-all"
                             >
                               Send WhatsApp
-                            </a>
+                            </button>
                           </>
                         ) : (
                           <div className="p-4 border border-border rounded-lg text-center">

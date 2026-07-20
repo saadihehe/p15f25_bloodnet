@@ -18,17 +18,26 @@ export async function POST(req: NextRequest) {
 
     const dbName = getDbNameForCity(city)
     const db = await getDb(dbName)
+    const recipient = await db.collection('users').findOne({ _id: new ObjectId(recipientId) })
+    if (!recipient) {
+      return NextResponse.json({ error: 'Recipient not found' }, { status: 404 })
+    }
 
     const notification = {
       _id: new ObjectId(),
-      senderId: new ObjectId(auth.user._id),
+      senderId: auth.user._id.toString(),
       senderName: auth.user.name,
       senderEmail: auth.user.email,
       senderRole: auth.user.role,
-      recipientId: new ObjectId(recipientId),
+      recipientId,
+      recipientEmail: recipient.email,
+      recipientRole: recipient.role,
+      title: type === 'message' ? 'New Message' : 'New Notification',
       message,
       type, // 'connection', 'message', 'donation_completed', etc
       read: false,
+      priority: 'medium',
+      city,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }

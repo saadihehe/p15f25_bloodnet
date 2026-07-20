@@ -36,7 +36,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const storedUser = localStorage.getItem('bloodnet_user')
@@ -51,7 +51,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const hydrateUser = async () => {
       try {
         const res = await fetch('/api/auth/me')
-        if (!res.ok) return
+        if (!res.ok) {
+          localStorage.removeItem('bloodnet_user')
+          setUser(null)
+          return
+        }
         const data = await res.json()
         if (data?.user) {
           const normalizedUser = {
@@ -65,6 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         console.error('Failed to hydrate auth user:', error)
+      } finally {
+        setIsLoading(false)
       }
     }
 
@@ -123,7 +129,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch (error) {
+      console.error('Failed to clear session cookie:', error)
+    }
     setUser(null)
     localStorage.removeItem('bloodnet_user')
   }

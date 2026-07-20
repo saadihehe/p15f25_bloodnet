@@ -44,6 +44,33 @@ export async function POST(req: NextRequest) {
 
     const result = await db.collection('messages').insertOne(messageDoc)
 
+    await db.collection('notifications').insertOne({
+      _id: new ObjectId(),
+      senderId: auth.user._id.toString(),
+      senderName: auth.user.name,
+      senderEmail: auth.user.email,
+      senderRole: auth.user.role,
+      recipientId,
+      recipientEmail: recipient.email,
+      recipientRole: recipient.role,
+      type: 'message',
+      title: 'New WhatsApp Contact',
+      message: `${auth.user.name} opened a WhatsApp conversation with you.`,
+      data: {
+        senderId: auth.user._id.toString(),
+        senderName: auth.user.name,
+        senderEmail: auth.user.email,
+        senderPhone: auth.user.phone,
+      },
+      read: false,
+      priority: 'high',
+      actionUrl: `/notifications/${auth.user._id.toString()}`,
+      actionLabel: 'View Profile',
+      city,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+
     // Generate WhatsApp link
     const whatsappLink = `https://wa.me/${recipient.phone.replace(/\D/g, '')}?text=${encodeURIComponent(
       `${auth.user.name} says: ${message}`

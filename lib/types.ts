@@ -17,6 +17,7 @@ export interface MongoUser {
   dateOfBirth?: string
   isVerified?: boolean
   lastDonationDate?: string
+  nextEligibleDonationDate?: string
   eligibilityStatus?: EligibilityStatus
   totalDonations?: number
   livesImpacted?: number

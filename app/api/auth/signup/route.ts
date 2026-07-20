@@ -4,7 +4,7 @@ import { getDbNameForCity } from '@/lib/db-config'
 import { getDb } from '@/lib/mongodb'
 import { mapMongoUserToAppUser } from '@/lib/mappers'
 import { sendOtpEmail } from '@/lib/email'
-import { validateSignupInput } from '@/lib/validation-utils'
+import { normalizePakistaniPhone, validateSignupInput } from '@/lib/validation-utils'
 import type { AppRole } from '@/lib/types'
 
 export async function POST(req: NextRequest) {
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase()
-    const normalizedPhone = String(phone).trim().replace(/\s+/g, '')
+    const normalizedPhone = normalizePakistaniPhone(phone)
     const normalizedCity = String(city).trim()
 
     const dbName = getDbNameForCity(normalizedCity)

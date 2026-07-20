@@ -41,6 +41,7 @@ export interface BloodRequest {
   requesterEmail: string
   requesterName: string
   requesterType: 'receiver' | 'hospital'
+  requesterPhone?: string
   bloodGroup: string
   units: number
   urgency: 'emergency' | 'urgent' | 'normal'
@@ -53,6 +54,8 @@ export interface BloodRequest {
   acceptedDonorId?: string
   acceptedDonorName?: string
   acceptedDonorEmail?: string
+  acceptedDonorPhone?: string
+  donationId?: string
   acceptedAt?: string
   estimatedDeliveryTime?: string
   
@@ -246,7 +249,7 @@ export interface RealtimeNotification {
   recipientId: string
   recipientEmail: string
   recipientRole: string
-  type: 'blood_request' | 'donation_verification' | 'appointment_reminder' | 'request_accepted' | 'blood_received' | 'eligibility_alert'
+  type: 'blood_request' | 'donation_verification' | 'appointment_reminder' | 'request_accepted' | 'blood_received' | 'eligibility_alert' | 'connection' | 'donation_completed' | 'certificate_ready'
   title: string
   message: string
   data: Record<string, any> // Contextual data (requestId, donorId, etc.)

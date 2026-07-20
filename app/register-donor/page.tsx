@@ -16,6 +16,7 @@ import { OCRBloodTestReader } from '@/components/ocr-blood-test-reader'
 import { Heart, Upload, Lock } from 'lucide-react'
 import { useAuth } from '@/components/auth-provider'
 import Link from 'next/link'
+import { isValidPakistaniPhone, normalizePakistaniPhone } from '@/lib/validation-utils'
 
 interface ExtractedBloodData {
   bloodGroup?: string
@@ -87,6 +88,12 @@ export default function RegisterDonorPage() {
       return
     }
 
+    const normalizedPhone = normalizePakistaniPhone(formData.phoneNumber)
+    if (!isValidPakistaniPhone(normalizedPhone)) {
+      setError('Phone number must be a valid Pakistani number in format +92xxxxxxxxxx')
+      return
+    }
+
     if (!user || user.role !== 'donor') {
       setError('Only donor accounts may register a donor profile.')
       return
@@ -101,7 +108,7 @@ export default function RegisterDonorPage() {
         body: JSON.stringify({
           name: formData.fullName,
           email: user.email,
-          phone: formData.phoneNumber,
+          phone: normalizedPhone,
           city: formData.city,
           bloodGroup: formData.bloodGroup,
           lastDonationDate: formData.lastDonationDate,

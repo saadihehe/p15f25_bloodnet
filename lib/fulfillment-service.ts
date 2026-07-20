@@ -7,9 +7,10 @@ import { ObjectId } from 'mongodb'
 import { getDb } from './mongodb'
 import { getDbNameForCity } from './db-config'
 import { generateCertificateFile } from './donation-workflow'
+import { getCompatibleDonorBloodGroups } from './blood-compatibility'
 import type { Appointment, BloodRequest, BloodUnit, DonationFull, AuditLog, EligibilityCheckResult, RealtimeNotification } from './types-extended'
 
-const DAYS_BETWEEN_DONATIONS = 56
+const DAYS_BETWEEN_DONATIONS = 90
 const MIN_AGE = 18
 const MAX_AGE = 65
 const MIN_WEIGHT_KG = 50
@@ -171,7 +172,8 @@ export async function createBloodRequest(
   urgency: 'emergency' | 'urgent' | 'normal',
   city: string,
   hospitalName?: string,
-  reason?: string
+  reason?: string,
+  requesterPhone?: string
 ): Promise<BloodRequest> {
   const dbName = getDbNameForCity(city)
   const db = await getDb(dbName)
@@ -190,6 +192,7 @@ export async function createBloodRequest(
     city,
     hospitalName,
     reason,
+    requesterPhone,
     status: 'open',
     expiresAt,
     createdAt: now,
@@ -199,9 +202,10 @@ export async function createBloodRequest(
   const result = await db.collection('blood_requests').insertOne(request)
 
   // Notify all eligible donors
+  const compatibleBloodGroups = getCompatibleDonorBloodGroups(bloodGroup)
   const donors = await db.collection('users').find({
     role: 'donor',
-    bloodGroup,
+    bloodGroup: compatibleBloodGroups.length ? { $in: compatibleBloodGroups } : bloodGroup,
     city,
     availability: true,
   }).toArray()
@@ -214,11 +218,11 @@ export async function createBloodRequest(
       type: 'blood_request',
       title: `${bloodGroup} Blood Needed - ${urgency.toUpperCase()}`,
       message: `${requesterName} needs ${units} units of ${bloodGroup} blood ${urgency === 'emergency' ? 'URGENTLY' : 'in ' + city}`,
-      data: { requestId: result.insertedId.toString(), bloodGroup, units, urgency, requesterName, city },
+      data: { requestId: result.insertedId.toString(), requesterId, requesterName, requesterEmail, requesterPhone, bloodGroup, units, urgency, city, hospitalName },
       read: false,
       priority: urgency === 'emergency' ? 'high' : 'medium',
-      actionUrl: `/requests/${result.insertedId.toString()}/accept`,
-      actionLabel: 'Help Now',
+      actionUrl: `/notifications/${requesterId}`,
+      actionLabel: 'View Receiver',
       city,
     })
   }
@@ -261,6 +265,33 @@ export async function donorAcceptsRequest(
   }
 
   const now = new Date().toISOString()
+  const existingDonation = await db.collection('donations').findOne({ requestId, donorId })
+  const donationId = existingDonation?._id || new ObjectId()
+
+  if (!existingDonation) {
+    await db.collection('donations').insertOne({
+      _id: donationId,
+      requestId,
+      donorId,
+      donorEmail,
+      donorName,
+      recipientId: request.requesterId,
+      recipientEmail: request.requesterEmail,
+      recipientName: request.requesterName,
+      bloodGroup: request.bloodGroup,
+      units: Number(request.units) || 1,
+      city,
+      hospitalName: request.hospitalName,
+      communicationDate: now,
+      status: 'pending',
+      donorConfirmed: false,
+      recipientConfirmed: false,
+      certificateGenerated: false,
+      createdAt: now,
+      updatedAt: now,
+    })
+  }
+
   await db.collection('blood_requests').updateOne(
     { _id: new ObjectId(requestId) },
     {
@@ -269,6 +300,8 @@ export async function donorAcceptsRequest(
         acceptedDonorId: donorId,
         acceptedDonorName: donorName,
         acceptedDonorEmail: donorEmail,
+        acceptedDonorPhone: donor.phone,
+        donationId: donationId.toString(),
         acceptedAt: now,
         updatedAt: now,
       },
@@ -281,7 +314,9 @@ export async function donorAcceptsRequest(
     donorId,
     donorEmail,
     donorName,
+    donorPhone: donor.phone,
     bloodGroup: request.bloodGroup,
+    donationId: donationId.toString(),
     status: 'accepted',
     acceptedAt: now,
     createdAt: now,
@@ -296,9 +331,34 @@ export async function donorAcceptsRequest(
     type: 'request_accepted',
     title: 'Donor Found!',
     message: `${donorName} has accepted to donate ${request.bloodGroup} blood for you!`,
-    data: { requestId, donorName, donorEmail, donorId },
+    data: { requestId, donationId: donationId.toString(), donorName, donorEmail, donorPhone: donor.phone, donorId },
     read: false,
     priority: 'high',
+    actionUrl: `/notifications/${donorId}`,
+    actionLabel: 'View Donor',
+    city,
+  })
+
+  // Notify donor that the receiver has opened a direct contact path.
+  await createNotification({
+    recipientId: donorId,
+    recipientEmail: donorEmail,
+    recipientRole: 'donor',
+    type: 'request_accepted',
+    title: 'Receiver Contacted You',
+    message: `${request.requesterName} contacted you for ${request.bloodGroup} blood. Confirm after the donation is completed.`,
+    data: {
+      requestId,
+      donationId: donationId.toString(),
+      requesterId: request.requesterId,
+      requesterName: request.requesterName,
+      requesterEmail: request.requesterEmail,
+      requesterPhone: request.requesterPhone,
+    },
+    read: false,
+    priority: 'high',
+    actionUrl: `/notifications/${request.requesterId}`,
+    actionLabel: 'View Receiver',
     city,
   })
 
@@ -318,6 +378,8 @@ export async function donorAcceptsRequest(
     acceptedDonorId: donorId,
     acceptedDonorName: donorName,
     acceptedDonorEmail: donorEmail,
+    acceptedDonorPhone: donor.phone,
+    donationId: donationId.toString(),
     acceptedAt: now,
     updatedAt: now,
   } as BloodRequest

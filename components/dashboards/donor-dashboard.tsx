@@ -286,14 +286,17 @@ export default function DonorDashboard({ user }: DonorDashboardProps) {
               ) : (
                 <div className="space-y-3">
                   {bloodRequests.map((request) => {
-                    const flow = getDonationFlowState(request.status || 'open', Boolean(request.acceptedDonorId || request.status === 'accepted'), false)
+                    const hasDonationTracking = Boolean(request.donationId)
+                    const receiverPhone = request.requesterPhone || request.contactNumber || ''
                     return (
                       <div key={request.id} className="rounded-lg border p-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
                             <p className="font-semibold">{request.unitsRequired || request.units} units of {request.bloodGroup}</p>
                             <p className="text-sm text-muted-foreground mt-1">{request.requesterName || 'Receiver'} • {request.hospitalName || request.city}</p>
-                            <p className="text-xs text-muted-foreground mt-2">{flow.label}</p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {hasDonationTracking ? 'Receiver contacted you. Confirm after you donate.' : 'Request assigned to you'}
+                            </p>
                           </div>
                           <div className="text-right">
                             <span className={`inline-block px-3 py-1 rounded text-sm font-semibold ${request.urgencyLevel === 'emergency' ? 'bg-red-100 text-red-700' : request.urgencyLevel === 'urgent' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
@@ -303,37 +306,43 @@ export default function DonorDashboard({ user }: DonorDashboardProps) {
                           </div>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {flow.canConfirmDonor && (
+                          {hasDonationTracking && (
                             <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => {
                               void (async () => {
                                 try {
-                                  const res = await fetch('/api/donations/submission', {
-                                    method: 'POST',
+                                  const res = await fetch(`/api/donations/${request.donationId}/donor-confirm`, {
+                                    method: 'PATCH',
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({
                                       donorId: user.id,
                                       donorName: user.name,
-                                      donorEmail: user.email,
-                                      bloodGroup: request.bloodGroup || user.bloodGroup,
-                                      hospitalName: request.hospitalName || 'Direct Match',
                                       city: user.city,
-                                      action: 'submit',
-                                      donationDate: new Date().toISOString().split('T')[0],
                                     }),
                                   })
                                   const payload = await res.json()
-                                  if (!res.ok) throw new Error(payload.error || 'Failed to submit donation')
-                                  toast({ title: 'Donation submitted', description: 'Your confirmation is now pending receiver review.', variant: 'default' })
+                                  if (!res.ok || !payload.success) throw new Error(payload.error || payload.message || 'Failed to confirm donation')
+                                  toast({ title: 'Donation confirmed', description: 'Waiting for receiver confirmation before admin approval.', variant: 'default' })
                                   window.location.reload()
                                 } catch (error) {
-                                  toast({ title: 'Submission failed', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' })
+                                  toast({ title: 'Confirmation failed', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' })
                                 }
                               })()
                             }}>
-                              Confirm Donation
+                              Confirm Donated
                             </Button>
                           )}
-                          <Button size="sm" variant="outline" onClick={() => window.open(`https://wa.me/${request.requesterEmail || ''}?text=Hi%20${request.requesterName || 'receiver'}%2C%20I%20am%20ready%20to%20help%20with%20the%20blood%20request.`, '_blank')}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const normalizedPhone = receiverPhone.replace(/[^0-9]/g, '')
+                              if (normalizedPhone) {
+                                window.open(`https://wa.me/${normalizedPhone}?text=Hi%20${request.requesterName || 'receiver'}%2C%20I%20am%20ready%20to%20help%20with%20the%20blood%20request.`, '_blank')
+                                return
+                              }
+                              toast({ title: 'No phone number', description: 'Receiver phone number is not available for this request.', variant: 'destructive' })
+                            }}
+                          >
                             Contact Receiver
                           </Button>
                         </div>
@@ -473,7 +482,7 @@ export default function DonorDashboard({ user }: DonorDashboardProps) {
                         {(() => {
                           const flow = getDonationFlowState(
                             donation.status || 'pending',
-                            Boolean(donation.status === 'submitted' || donation.status === 'receiver_confirmed' || donation.status === 'completed'),
+                            Boolean(donation.donorConfirmed || donation.status === 'submitted' || donation.status === 'receiver_confirmed' || donation.status === 'completed'),
                             Boolean(donation.recipientConfirmed || donation.status === 'receiver_confirmed' || donation.status === 'completed')
                           )
 
@@ -506,26 +515,9 @@ export default function DonorDashboard({ user }: DonorDashboardProps) {
                                 </Button>
                               )}
                               {flow.canApprove && (
-                                <Button
-                                  onClick={async () => {
-                                    try {
-                                      const res = await fetch(`/api/admin/donations/${donation.id}/approve?city=${encodeURIComponent(user.city)}`, {
-                                        method: 'PATCH',
-                                      })
-                                      const payload = await res.json()
-                                      if (!res.ok || !payload.success) {
-                                        throw new Error(payload.error || 'Failed to approve donation')
-                                      }
-                                      toast({ title: 'Donation approved', description: 'Certificate generated successfully.', variant: 'default' })
-                                      window.location.reload()
-                                    } catch (err) {
-                                      toast({ title: 'Approval failed', description: err instanceof Error ? err.message : 'Please try again.', variant: 'destructive' })
-                                    }
-                                  }}
-                                  className="px-3 py-2 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors flex-shrink-0"
-                                >
-                                  Approve & Issue Certificate
-                                </Button>
+                                <span className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-700">
+                                  Waiting for admin approval
+                                </span>
                               )}
                             </>
                           )
