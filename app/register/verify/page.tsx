@@ -42,13 +42,25 @@ export default function VerifyPage() {
       if (!res.ok) {
         setError(data.error || 'Verification failed')
       } else {
-        // Successful verification - session cookie is set, wait a moment then redirect
-        // This gives the browser time to receive and set the cookie
         setMessage('✓ Email verified! Redirecting to dashboard...')
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        // Redirect to dashboard - AuthProvider will hydrate from cookie
-        router.push('/dashboard')
+
+        const maxAttempts = 5
+        let authReady = false
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          const authRes = await fetch('/api/auth/me', { cache: 'no-store' })
+          if (authRes.ok) {
+            authReady = true
+            break
+          }
+          await new Promise((resolve) => setTimeout(resolve, 400))
+        }
+
+        if (authReady) {
+          router.push('/dashboard')
+        } else {
+          setError('Verification succeeded, but we could not confirm login immediately. Reloading page now...')
+          window.location.assign('/dashboard')
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed')
