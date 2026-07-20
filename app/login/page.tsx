@@ -35,11 +35,16 @@ export default function LoginPage() {
       await login(email, password, role)
       router.push('/dashboard')
     } catch (err) {
-      if (err instanceof Error && err.message === 'Email not verified') {
-        router.push(`/register/verify?email=${encodeURIComponent(email)}`)
-        return
+      const message = err instanceof Error ? err.message : ''
+      if (message.includes('Email not verified')) {
+        setError('Please verify your email first. We sent you a verification code.')
+        // Optionally redirect to verify page
+        setTimeout(() => {
+          router.push(`/register/verify?email=${encodeURIComponent(email)}`)
+        }, 2000)
+      } else {
+        setError(message || 'Login failed. Please try again.')
       }
-      setError(err instanceof Error ? err.message : 'Login failed. Please try again.')
     }
   }
 

@@ -42,7 +42,9 @@ export default function VerifyPage() {
       if (!res.ok) {
         setError(data.error || 'Verification failed')
       } else {
-        router.push(`/register/verified?email=${encodeURIComponent(email)}`)
+        // Successful verification - redirect to dashboard
+        // Session cookie is already set from otp/verify endpoint
+        router.push('/dashboard')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed')

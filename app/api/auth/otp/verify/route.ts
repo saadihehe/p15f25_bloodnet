@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/lib/mongodb'
 import { DB_KARACHI, DB_PAKISTAN } from '@/lib/db-config'
 import { setAuthCookie } from '@/lib/auth'
+import { mapMongoUserToAppUser } from '@/lib/mappers'
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,8 +41,12 @@ export async function POST(req: NextRequest) {
     // Mark verified and clear otp fields
     await users.updateOne({ _id: user._id }, { $set: { isVerified: true }, $unset: { otpCode: '', otpExpiresAt: '' } })
 
+    // Fetch updated user document for response
+    const updatedUser = await users.findOne({ _id: user._id })
+
     // Create a NextResponse so we can set auth cookie
-    const response = NextResponse.json({ success: true, message: 'Email verified' })
+    const appUser = mapMongoUserToAppUser(updatedUser as any)
+    const response = NextResponse.json({ success: true, message: 'Email verified', user: appUser })
     // user may be a raw DB document; map minimal fields expected by setAuthCookie
     const userForCookie = {
       _id: user._id,
