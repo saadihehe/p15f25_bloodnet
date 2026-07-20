@@ -34,6 +34,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
     }
 
+    if (!user.isVerified) {
+      return NextResponse.json({ error: 'Email not verified', email: user.email }, { status: 403 })
+    }
+
     if (user.role !== role) {
       return NextResponse.json({ error: `This account is registered as ${user.role}` }, { status: 401 })
     }

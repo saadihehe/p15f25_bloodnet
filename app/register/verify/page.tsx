@@ -14,15 +14,16 @@ export default function VerifyPage() {
   const router = useRouter()
   const [code, setCode] = useState("")
   const [isVerifying, setIsVerifying] = useState(false)
-  const [isVerified, setIsVerified] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-
+  const [hasEmailParam, setHasEmailParam] = useState(false)
   const [email, setEmail] = useState('')
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    setEmail(params.get('email') || '')
+    const emailParam = params.get('email') || ''
+    setEmail(emailParam)
+    setHasEmailParam(!!emailParam)
   }, [])
 
   const handleVerify = async (e: React.FormEvent) => {
@@ -41,7 +42,7 @@ export default function VerifyPage() {
       if (!res.ok) {
         setError(data.error || 'Verification failed')
       } else {
-        setIsVerified(true)
+        router.push(`/register/verified?email=${encodeURIComponent(email)}`)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verification failed')
@@ -77,7 +78,7 @@ export default function VerifyPage() {
     }
   }
 
-  if (isVerified) {
+  if (!hasEmailParam) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/5">
         <div className="w-full max-w-md px-4">
@@ -85,12 +86,12 @@ export default function VerifyPage() {
             <CardContent className="pt-8">
               <div className="text-center space-y-4">
                 <div className="flex justify-center">
-                  <CheckCircle className="w-16 h-16 text-green-500" />
+                  <CheckCircle className="w-16 h-16 text-amber-500" />
                 </div>
-                <h2 className="text-2xl font-bold">Verification Successful!</h2>
-                <p className="text-muted-foreground">Your account has been verified. You can now log in.</p>
-                <Button onClick={() => router.push("/login")} className="w-full mt-4">
-                  Continue to Login
+                <h2 className="text-2xl font-bold">Missing Verification Email</h2>
+                <p className="text-muted-foreground">Please start from the signup page so we can send your OTP to the right email address.</p>
+                <Button onClick={() => router.push('/signup')} className="w-full mt-4">
+                  Return to Signup
                 </Button>
               </div>
             </CardContent>

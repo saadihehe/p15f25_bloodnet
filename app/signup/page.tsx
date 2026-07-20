@@ -21,6 +21,8 @@ export default function SignupPage() {
   const [role, setRole] = useState<UserRole | ''>('')
   const [city, setCity] = useState('')
   const [bloodGroup, setBloodGroup] = useState('')
+  const [emailSentTo, setEmailSentTo] = useState('')
+  const [isSignedUp, setIsSignedUp] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -85,9 +87,10 @@ export default function SignupPage() {
     }
 
     try {
+      const normalizedEmail = formData.email.trim().toLowerCase()
       const result = await signup({
         name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
+        email: normalizedEmail,
         password: formData.password,
         phone: normalizedPhone,
         role: role as Exclude<UserRole, null>,
@@ -95,7 +98,9 @@ export default function SignupPage() {
         bloodGroup: bloodGroup || undefined,
       })
       if (result?.success) {
-        router.push(`/register/verify?email=${encodeURIComponent(formData.email.trim().toLowerCase())}`)
+        setEmailSentTo(normalizedEmail)
+        setIsSignedUp(true)
+        setError('')
       } else {
         setError(result?.error || 'Signup failed. Please try again.')
       }
@@ -164,113 +169,138 @@ export default function SignupPage() {
                     </div>
                   )}
 
-                  <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium block mb-2">Full Name</label>
-                      <Input
-                        placeholder="Your name"
-                        value={formData.name}
-                        onChange={(e) => handleInputChange('name', e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium block mb-2">Email</label>
-                      <Input
-                        type="email"
-                        placeholder="your@email.com"
-                        value={formData.email}
-                        onChange={(e) => handleInputChange('email', e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium block mb-2">Phone (+92)</label>
-                      <Input
-                        placeholder="+92-300-1234567"
-                        value={formData.phone}
-                        onChange={(e) => handleInputChange('phone', e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium block mb-2">City</label>
-                      <Select value={city} onValueChange={setCity}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select city" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {pakistaniCities.map((c) => (
-                            <SelectItem key={c} value={c}>{c}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {(role === 'donor' || role === 'receiver') && (
-                      <div>
-                        <label className="text-sm font-medium block mb-2">Blood Group</label>
-                        <Select value={bloodGroup} onValueChange={setBloodGroup}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select blood group" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {bloodGroups.map((bg) => (
-                              <SelectItem key={bg} value={bg}>{bg}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                  {isSignedUp ? (
+                    <div className="space-y-4">
+                      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-primary-700">
+                        OTP has been sent to <strong>{emailSentTo}</strong>. Check your inbox and spam folder for the verification code.
                       </div>
-                    )}
-
-                    <div>
-                      <label className="text-sm font-medium block mb-2">Password</label>
-                      <Input
-                        type="password"
-                        placeholder="Enter password"
-                        value={formData.password}
-                        onChange={(e) => handleInputChange('password', e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-sm font-medium block mb-2">Confirm Password</label>
-                      <Input
-                        type="password"
-                        placeholder="Confirm password"
-                        value={formData.confirmPassword}
-                        onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div className="flex gap-3">
+                      <Button
+                        type="button"
+                        className="w-full"
+                        onClick={() => router.push(`/register/verify?email=${encodeURIComponent(emailSentTo)}`)}
+                      >
+                        Continue to Email Verification
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"
-                        className="flex-1 bg-transparent"
-                        onClick={() => setStep(1)}
+                        className="w-full"
+                        onClick={() => router.push('/login')}
                       >
-                        Back
-                      </Button>
-                      <Button type="submit" className="flex-1" disabled={isLoading}>
-                        {isLoading ? 'Creating...' : 'Create Account'}
+                        Back to Login
                       </Button>
                     </div>
-                  </form>
+                  ) : (
+                    <div>
+                      <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                          <label className="text-sm font-medium block mb-2">Full Name</label>
+                          <Input
+                            placeholder="Your name"
+                            value={formData.name}
+                            onChange={(e) => handleInputChange('name', e.target.value)}
+                            required
+                          />
+                        </div>
 
-                  <div className="mt-4 text-center text-sm">
-                    <p className="text-muted-foreground">
-                      Already have an account?{' '}
-                      <Link href="/login" className="text-primary hover:underline font-semibold">
-                        Sign in
-                      </Link>
-                    </p>
-                  </div>
+                        <div>
+                          <label className="text-sm font-medium block mb-2">Email</label>
+                          <Input
+                            type="email"
+                            placeholder="your@email.com"
+                            value={formData.email}
+                            onChange={(e) => handleInputChange('email', e.target.value)}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium block mb-2">Phone (+92)</label>
+                          <Input
+                            placeholder="+92-300-1234567"
+                            value={formData.phone}
+                            onChange={(e) => handleInputChange('phone', e.target.value)}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium block mb-2">City</label>
+                          <Select value={city} onValueChange={setCity}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select city" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {pakistaniCities.map((c) => (
+                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {(role === 'donor' || role === 'receiver') && (
+                          <div>
+                            <label className="text-sm font-medium block mb-2">Blood Group</label>
+                            <Select value={bloodGroup} onValueChange={setBloodGroup}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select blood group" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {bloodGroups.map((bg) => (
+                                  <SelectItem key={bg} value={bg}>{bg}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="text-sm font-medium block mb-2">Password</label>
+                          <Input
+                            type="password"
+                            placeholder="Enter password"
+                            value={formData.password}
+                            onChange={(e) => handleInputChange('password', e.target.value)}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-sm font-medium block mb-2">Confirm Password</label>
+                          <Input
+                            type="password"
+                            placeholder="Confirm password"
+                            value={formData.confirmPassword}
+                            onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+                            required
+                          />
+                        </div>
+
+                        <div className="flex gap-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="flex-1 bg-transparent"
+                            onClick={() => setStep(1)}
+                          >
+                            Back
+                          </Button>
+                          <Button type="submit" className="flex-1" disabled={isLoading}>
+                            {isLoading ? 'Creating...' : 'Create Account'}
+                          </Button>
+                        </div>
+                      </form>
+
+                      <div className="mt-4 text-center text-sm">
+                        <p className="text-muted-foreground">
+                          Already have an account?{' '}
+                          <Link href="/login" className="text-primary hover:underline font-semibold">
+                            Sign in
+                          </Link>
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
