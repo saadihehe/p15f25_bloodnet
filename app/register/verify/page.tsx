@@ -42,8 +42,12 @@ export default function VerifyPage() {
       if (!res.ok) {
         setError(data.error || 'Verification failed')
       } else {
-        // Successful verification - redirect to dashboard
-        // Session cookie is already set from otp/verify endpoint
+        // Successful verification - session cookie is set, wait a moment then redirect
+        // This gives the browser time to receive and set the cookie
+        setMessage('✓ Email verified! Redirecting to dashboard...')
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // Redirect to dashboard - AuthProvider will hydrate from cookie
         router.push('/dashboard')
       }
     } catch (err) {

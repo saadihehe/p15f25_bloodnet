@@ -21,10 +21,9 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
   const [activity, setActivity] = useState<any[]>([])
   const [pendingDonations, setPendingDonations] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [adminMode, setAdminMode] = useState(true)
 
-  useEffect(() => {
-    setIsClient(true)
-    async function loadAdminData() {
+  const loadAdminData = async () => {
       try {
         const [kpisRes, usersRes, requestsRes, pendingRes] = await Promise.all([
           fetch('/api/admin/kpis?city=Karachi'),
@@ -79,13 +78,15 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
           })),
         ]
         setActivity(activityItems)
-      } catch (error) {
-        console.error('Failed to load admin dashboard data:', error)
-      } finally {
-        setIsLoading(false)
-      }
+    } catch (error) {
+      console.error('Failed to load admin dashboard data:', error)
+    } finally {
+      setIsLoading(false)
     }
+  }
 
+  useEffect(() => {
+    setIsClient(true)
     loadAdminData()
   }, [])
 
@@ -213,14 +214,19 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
 
   const handleApproveDonation = async (donationId: string) => {
     try {
+      console.log('🔵 Approving donation:', donationId)
       const res = await fetch(`/api/admin/donations/${donationId}/approve?city=Karachi`, { method: 'PATCH' })
+      console.log('🔵 Response status:', res.status)
       const payload = await res.json()
+      console.log('🔵 Response payload:', payload)
       if (!res.ok || !payload.success) {
-        throw new Error(payload.error || 'Approval failed')
+        throw new Error(payload.error || payload.message || 'Approval failed')
       }
-      toast({ title: 'Donation approved', description: 'Certificate generated and donation marked complete.', variant: 'default' })
-      setPendingDonations((current) => current.filter((item) => item.id !== donationId))
+      toast({ title: '✓ Donation Approved!', description: 'Certificate generated and sent to donor.', variant: 'default' })
+      // Refresh the donations list
+      await loadAdminData()
     } catch (error) {
+      console.error('❌ Approval error:', error)
       toast({ title: 'Approval failed', description: error instanceof Error ? error.message : 'Please try again.', variant: 'destructive' })
     }
   }
@@ -231,8 +237,35 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
     { id: 3, type: 'Hospitals Registered', count: users.filter((entry) => entry.role === 'hospital').length, urgent: false },
   ]
 
+  // If not in admin mode, show donor dashboard instead
+  if (!adminMode) {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold">Donor Mode Active</h2>
+          <Button onClick={() => setAdminMode(true)} variant="outline">
+            Back to Admin
+          </Button>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground">You're viewing as a donor. Switch back to admin to approve donations.</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8">
+      {/* Header with Mode Toggle */}
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-bold">Admin Dashboard</h2>
+        <Button onClick={() => setAdminMode(false)} variant="outline">
+          View as Donor
+        </Button>
+      </div>
+
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {systemStats.map((stat) => {
@@ -291,15 +324,21 @@ export default function AdminDashboard({ user }: AdminDashboardProps) {
           {pendingDonations.length === 0 ? (
             <p className="text-sm text-muted-foreground">No pending donation approvals.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {pendingDonations.map((donation) => (
-                <div key={donation.id} className="flex items-center justify-between rounded-lg border p-3">
-                  <div>
-                    <p className="font-semibold">{donation.donorName || 'Donor'} → {donation.recipientName || 'Receiver'}</p>
-                    <p className="text-sm text-muted-foreground">{donation.bloodGroup} • {donation.units} unit(s) • {donation.hospitalName || 'Direct donation'}</p>
+                <div key={donation.id} className="flex items-center justify-between rounded-lg border-2 border-orange-200 p-4 bg-orange-50 dark:bg-orange-950/20">
+                  <div className="flex-1">
+                    <p className="font-bold text-lg">{donation.donorName || 'Donor'} → {donation.recipientName || 'Receiver'}</p>
+                    <p className="text-sm text-muted-foreground mt-1">🩸 {donation.bloodGroup} • {donation.units} unit(s)</p>
+                    <p className="text-xs text-muted-foreground">Hospital: {donation.hospitalName || 'Direct donation'}</p>
+                    <p className="text-xs text-muted-foreground">ID: {donation.id}</p>
                   </div>
-                  <Button size="sm" onClick={() => void handleApproveDonation(donation.id)}>
-                    Approve
+                  <Button 
+                    size="lg"
+                    onClick={() => void handleApproveDonation(donation.id)}
+                    className="ml-4 bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    ✓ Approve
                   </Button>
                 </div>
               ))}

@@ -68,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Hydrate from API/cookie - this runs on mount to check if user is logged in via session cookie
     void hydrateUser()
   }, [])
 

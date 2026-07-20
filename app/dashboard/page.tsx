@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useAuth } from '@/components/auth-provider'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import DonorDashboard from '@/components/dashboards/donor-dashboard'
 import ReceiverDashboard from '@/components/dashboards/receiver-dashboard'
 import HospitalDashboard from '@/components/dashboards/hospital-dashboard'
@@ -14,16 +14,31 @@ import { Heart, AlertCircle, ActivitySquare } from 'lucide-react'
 import Link from 'next/link'
 
 export default function DashboardPage() {
-  const { user, logout } = useAuth()
+  const { user, logout, isLoading } = useAuth()
   const router = useRouter()
+  const [isHydrating, setIsHydrating] = useState(true)
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login')
-    } else if (user.role === 'admin') {
-      router.push('/admin/dashboard')
+    setIsHydrating(true)
+  }, [isLoading])
+
+  useEffect(() => {
+    // Give auth provider time to hydrate from cookie
+    const hydrationTimeout = setTimeout(() => {
+      setIsHydrating(false)
+    }, 500)
+    return () => clearTimeout(hydrationTimeout)
+  }, [])
+
+  useEffect(() => {
+    if (!isHydrating) {
+      if (!user) {
+        router.push('/login')
+      } else if (user.role === 'admin') {
+        router.push('/admin/dashboard')
+      }
     }
-  }, [user, router])
+  }, [user, router, isHydrating])
 
   // Map new role system to appropriate dashboard
   const getDashboardComponent = () => {
@@ -39,7 +54,7 @@ export default function DashboardPage() {
     }
   }
 
-  if (!user) {
+  if (isHydrating || !user) {
     return (
       <>
         <Navbar />
@@ -47,14 +62,26 @@ export default function DashboardPage() {
           <div className="mx-auto w-full max-w-md">
             <Card>
               <CardContent className="pt-6 sm:pt-8 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-100 text-red-600 mx-auto mb-4">
-                  <AlertCircle className="h-6 w-6" />
-                </div>
-                <h1 className="text-xl sm:text-2xl font-bold mb-2">Access Denied</h1>
-                <p className="text-sm sm:text-base text-muted-foreground mb-6">Please log in to access the dashboard</p>
-                <Button onClick={() => router.push('/login')} className="w-full">
-                  Login
-                </Button>
+                {isHydrating ? (
+                  <>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 text-blue-600 mx-auto mb-4 animate-pulse">
+                      <Heart className="h-6 w-6" />
+                    </div>
+                    <h1 className="text-xl sm:text-2xl font-bold mb-2">Loading Dashboard</h1>
+                    <p className="text-sm sm:text-base text-muted-foreground mb-6">Please wait...</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-red-100 text-red-600 mx-auto mb-4">
+                      <AlertCircle className="h-6 w-6" />
+                    </div>
+                    <h1 className="text-xl sm:text-2xl font-bold mb-2">Access Denied</h1>
+                    <p className="text-sm sm:text-base text-muted-foreground mb-6">Please log in to access the dashboard</p>
+                    <Button onClick={() => router.push('/login')} className="w-full">
+                      Login
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
