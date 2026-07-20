@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
+// import fs from 'fs'
+// import path from 'path'
 import { ObjectId } from 'mongodb'
 import { getDbNameForCity } from './db-config'
 import { getDb } from './mongodb'
@@ -54,11 +54,11 @@ export interface DonationDocument {
   updatedAt: string
 }
 
-const CERTIFICATE_DIR = path.join(process.cwd(), 'public', 'certificates')
+// const CERTIFICATE_DIR = path.join(process.cwd(), 'public', 'certificates')
 
-function ensureCertificatesDir() {
-  fs.mkdirSync(CERTIFICATE_DIR, { recursive: true })
-}
+// function ensureCertificatesDir() {
+//   fs.mkdirSync(CERTIFICATE_DIR, { recursive: true })
+// }
 
 function escapePdfText(value: string) {
   return value
@@ -456,32 +456,88 @@ export async function getDonationCertificate(donationId: string, city: string) {
   return donation.certificateUrl
 }
 
-export async function generateCertificateFile({ donorName, donationId, date }: { donorName: string; donationId: string; date: string }) {
-  ensureCertificatesDir()
-  const safeName = donorName.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'donor'
-  const fileName = `${safeName}-${donationId}.pdf`
-  const filePath = path.join(CERTIFICATE_DIR, fileName)
-  fs.writeFileSync(filePath, createCertificatePdfBuffer({ donorName, donationId, date }))
+// export async function generateCertificateFile({ donorName, donationId, date }: { donorName: string; donationId: string; date: string }) {
+//   ensureCertificatesDir()
+//   const safeName = donorName.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'donor'
+//   const fileName = `${safeName}-${donationId}.pdf`
+//   const filePath = path.join(CERTIFICATE_DIR, fileName)
+//   fs.writeFileSync(filePath, createCertificatePdfBuffer({ donorName, donationId, date }))
 
-  return `/certificates/${fileName}`
+//   return `/certificates/${fileName}`
+// }
+
+export async function generateCertificateFile({
+  donorName,
+  donationId,
+  date,
+}: {
+  donorName: string
+  donationId: string
+  date: string
+}) {
+  // Just return a URL that points to your API route.
+  // The PDF will be generated when the user downloads it.
+  return `/api/certificates/${donationId}`
 }
 
-export async function streamCertificateResponse(donationId: string, city: string) {
-  const certificateUrl = await getDonationCertificate(donationId, city)
-  if (!certificateUrl) {
-    return NextResponse.json({ error: 'Certificate not found' }, { status: 404 })
+// export async function streamCertificateResponse(donationId: string, city: string) {
+//   const certificateUrl = await getDonationCertificate(donationId, city)
+//   if (!certificateUrl) {
+//     return NextResponse.json({ error: 'Certificate not found' }, { status: 404 })
+//   }
+
+//   const filePath = path.join(process.cwd(), 'public', certificateUrl.replace(/^\//, ''))
+//   if (!fs.existsSync(filePath)) {
+//     return NextResponse.json({ error: 'Certificate file missing' }, { status: 404 })
+//   }
+
+//   return new NextResponse(fs.createReadStream(filePath) as unknown as BodyInit, {
+//     status: 200,
+//     headers: {
+//       'Content-Type': 'application/pdf',
+//       'Content-Disposition': `attachment; filename="certificate-${donationId}.pdf"`,
+//     },
+//   })
+// }
+
+export async function streamCertificateResponse(
+  donationId: string,
+  city: string
+) {
+  const dbName = getDbNameForCity(city)
+  const db = await getDb(dbName)
+
+  const donation = await db
+    .collection<DonationDocument>("donations")
+    .findOne({ _id: new ObjectId(donationId) })
+
+  if (!donation) {
+    return NextResponse.json(
+      { error: "Certificate not found" },
+      { status: 404 }
+    )
   }
 
-  const filePath = path.join(process.cwd(), 'public', certificateUrl.replace(/^\//, ''))
-  if (!fs.existsSync(filePath)) {
-    return NextResponse.json({ error: 'Certificate file missing' }, { status: 404 })
+  if (donation.status !== "completed") {
+    return NextResponse.json(
+      { error: "Donation not approved yet" },
+      { status: 400 }
+    )
   }
 
-  return new NextResponse(fs.createReadStream(filePath) as unknown as BodyInit, {
+  const pdf = createCertificatePdfBuffer({
+    donorName: donation.donorName,
+    donationId: donation._id.toString(),
+    date: donation.donationDate || donation.updatedAt,
+    bloodGroup: donation.bloodGroup,
+    hospitalName: donation.hospitalName,
+  })
+
+  return new NextResponse(pdf, {
     status: 200,
     headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="certificate-${donationId}.pdf"`,
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="certificate-${donation._id}.pdf"`,
     },
   })
 }
