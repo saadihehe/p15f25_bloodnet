@@ -530,39 +530,51 @@ export default function DonorDashboard({ user }: DonorDashboardProps) {
                             </>
                           )
                         })()}
-                        {donation.status === 'verified' && (
+                        {donation.status === 'completed' && donation.certificateGenerated && (
                           <Button
                             onClick={async () => {
                               try {
-                                const res = await fetch('/api/donations/certificate', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    donorName: user.name,
-                                    bloodGroup: donation.bloodGroup,
-                                    hospitalName: donation.hospitalName,
-                                    donationDate: new Date(donation.donationDate || donation.communicationDate || new Date().toISOString()).toLocaleDateString(),
-                                    donationId: donation.id,
-                                  }),
-                                })
-                                if (res.ok) {
-                                  const blob = await res.blob()
-                                  const url = window.URL.createObjectURL(blob)
-                                  const a = document.createElement('a')
-                                  a.href = url
-                                  a.download = `BloodNet_Certificate_${user.name.replace(/\s+/g, '_')}.pdf`
-                                  document.body.appendChild(a)
-                                  a.click()
-                                  document.body.removeChild(a)
-                                  window.URL.revokeObjectURL(url)
-                                }
+                                const res = await fetch(`/api/donations/${donation.id}/certificate/download?city=${encodeURIComponent(user.city)}`)
+                                if (!res.ok) throw new Error('Failed to download certificate')
+                                const blob = await res.blob()
+                                const url = window.URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url
+                                a.download = `BloodNet_Certificate_${donation.id}.pdf`
+                                document.body.appendChild(a)
+                                a.click()
+                                document.body.removeChild(a)
+                                window.URL.revokeObjectURL(url)
+                                toast({ title: 'Certificate downloaded!', variant: 'default' })
                               } catch (err) {
-                                  toast({ title: 'Download failed', description: 'Failed to download certificate', variant: 'destructive' })
+                                toast({ title: 'Download failed', description: 'Failed to download certificate', variant: 'destructive' })
                               }
                             }}
-                            className="px-3 py-2 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary/90 transition-colors flex-shrink-0"
+                            className="px-3 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
                           >
-                            ↓ Certificate
+                            📄 Download Certificate
+                          </Button>
+                        )}
+                        {donation.status === 'receiver_confirmed' && (
+                          <Button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`/api/donations/${donation.id}/push-complete?city=${encodeURIComponent(user.city)}`, {
+                                  method: 'POST',
+                                })
+                                const payload = await res.json()
+                                if (!res.ok || !payload.success) {
+                                  throw new Error(payload.error || 'Failed to push completion')
+                                }
+                                toast({ title: 'Donation confirmed!', description: 'Admin notified. Waiting for approval to issue certificate.', variant: 'default' })
+                                window.location.reload()
+                              } catch (err) {
+                                toast({ title: 'Failed', description: err instanceof Error ? err.message : 'Please try again.', variant: 'destructive' })
+                              }
+                            }}
+                            className="px-3 py-2 bg-purple-600 text-white text-sm font-semibold rounded-lg hover:bg-purple-700 transition-colors flex-shrink-0"
+                          >
+                            ✓ Push Complete
                           </Button>
                         )}
                       </div>

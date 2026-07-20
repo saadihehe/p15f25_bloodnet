@@ -1,219 +1,248 @@
-"use client"
+'use client'
 
-import { Navbar } from "@/components/navbar"
-import { Footer } from "@/components/footer"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { AlertTriangle, Heart, Bell, CheckCircle, Clock, Trash2, CheckCheck } from "lucide-react"
-import { useState, useEffect } from "react"
-import { useAuth } from "@/components/auth-provider"
+import { Navbar } from '@/components/navbar'
+import { Footer } from '@/components/footer'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Heart, Bell, CheckCircle, Clock, Trash2, MessageCircle, ArrowRight } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useAuth } from '@/components/auth-provider'
+import { useRouter } from 'next/navigation'
+import { useToast } from '@/hooks/use-toast'
 
 interface Notification {
   id: string
-  type: "emergency" | "match" | "request" | "update" | "achievement"
-  title: string
+  senderId: string
+  senderName: string
+  senderEmail: string
+  senderRole: string
   message: string
-  timestamp: string
+  type: string
   read: boolean
-  actionUrl?: string
+  createdAt: string
+  donationId?: string
 }
 
 export default function NotificationsPage() {
   const { user } = useAuth()
+  const router = useRouter()
+  const { toast } = useToast()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!user) {
-      setNotifications([])
       setLoading(false)
       return
     }
 
-    const fetchNotifications = async () => {
-      try {
-        const response = await fetch(`/api/notifications?city=${encodeURIComponent(user.city)}&userEmail=${encodeURIComponent(user.email)}`)
-        if (response.ok) {
-          const data = await response.json()
-          setNotifications(data.notifications || [])
-        }
-      } catch (error) {
-        console.error('[v0] Error fetching notifications:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchNotifications()
-
-    // Poll for new notifications every 3 seconds
-    const interval = setInterval(fetchNotifications, 3000)
+    // Poll for new notifications every 5 seconds
+    const interval = setInterval(fetchNotifications, 5000)
     return () => clearInterval(interval)
   }, [user])
 
-  const handleDelete = async (id: string) => {
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch(`/api/notifications/get?city=${encodeURIComponent(user?.city || 'Karachi')}`)
+      if (res.ok) {
+        const data = await res.json()
+        setNotifications(data.notifications || [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch notifications:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      const res = await fetch(`/api/notifications/${notificationId}/read?city=${encodeURIComponent(user?.city || 'Karachi')}`, {
+        method: 'PATCH',
+      })
+      if (res.ok) {
+        setNotifications(notifications.map((n) => (n.id === notificationId ? { ...n, read: true } : n)))
+      }
+    } catch (error) {
+      console.error('Failed to mark as read:', error)
+    }
+  }
+
+  const handleDelete = (id: string) => {
     setNotifications(notifications.filter((n) => n.id !== id))
-    try {
-      await fetch(`/api/notifications?city=${encodeURIComponent(user?.city || 'Karachi')}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete', notificationId: id, city: user?.city, userEmail: user?.email }),
-      })
-    } catch (error) {
-      console.error('[v0] Error deleting notification:', error)
-    }
   }
 
-  const handleMarkAsRead = async (id: string) => {
-    setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)))
-    try {
-      await fetch(`/api/notifications?city=${encodeURIComponent(user?.city || 'Karachi')}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'mark-as-read', notificationId: id, city: user?.city, userEmail: user?.email }),
-      })
-    } catch (error) {
-      console.error('[v0] Error marking notification as read:', error)
-    }
+  const handleViewProfile = (senderId: string) => {
+    router.push(`/notifications/${senderId}`)
   }
 
-  const handleMarkAllAsRead = async () => {
-    setNotifications(notifications.map((n) => ({ ...n, read: true })))
-    try {
-      await fetch(`/api/notifications?city=${encodeURIComponent(user?.city || 'Karachi')}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'mark-all-as-read', city: user?.city, userEmail: user?.email }),
-      })
-    } catch (error) {
-      console.error('[v0] Error marking all as read:', error)
-    }
-  }
-
-  const getIcon = (type: string) => {
+  const getTypeIcon = (type: string) => {
     switch (type) {
-      case "emergency":
-        return <AlertTriangle className="w-5 h-5 text-red-500" />
-      case "match":
-        return <Heart className="w-5 h-5 text-pink-500" />
-      case "achievement":
-        return <CheckCircle className="w-5 h-5 text-green-500" />
+      case 'connection':
+        return <Heart className="w-5 h-5 text-red-600" />
+      case 'message':
+        return <MessageCircle className="w-5 h-5 text-blue-600" />
+      case 'donation_completed':
+        return <CheckCircle className="w-5 h-5 text-green-600" />
       default:
-        return <Bell className="w-5 h-5 text-blue-500" />
+        return <Bell className="w-5 h-5 text-yellow-600" />
     }
   }
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const getTypeBadge = (type: string) => {
+    switch (type) {
+      case 'connection':
+        return <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">Connected</Badge>
+      case 'message':
+        return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">Message</Badge>
+      case 'donation_completed':
+        return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Donation Complete</Badge>
+      default:
+        return <Badge className="bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400">Notification</Badge>
+    }
+  }
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffHours < 24) return `${diffHours}h ago`
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString()
+  }
+
+  if (!user) {
+    return (
+      <>
+        <Navbar />
+        <main className="min-h-screen bg-muted/30 py-8 px-4 flex items-center justify-center">
+          <Card className="max-w-md w-full">
+            <CardContent className="pt-8 text-center">
+              <p className="text-muted-foreground">Please log in to view notifications</p>
+            </CardContent>
+          </Card>
+        </main>
+        <Footer />
+      </>
+    )
+  }
 
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-background">
-        <div className="max-w-4xl mx-auto px-4 py-8">
+      <main className="min-h-screen bg-muted/30 py-8 px-4 sm:px-6">
+        <div className="max-w-3xl mx-auto">
+          {/* Header */}
           <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-3xl font-bold mb-2">Notifications</h1>
-                <p className="text-muted-foreground">
-                  {unreadCount > 0 ? `${unreadCount} new notification${unreadCount !== 1 ? 's' : ''}` : "All caught up"}
-                </p>
+            <h1 className="text-4xl font-bold mb-2 flex items-center gap-3">
+              <div className="p-3 rounded-lg bg-blue-100 dark:bg-blue-900">
+                <Bell className="w-8 h-8 text-blue-600 dark:text-blue-400" />
               </div>
-              {unreadCount > 0 && (
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-primary/20 text-primary">{unreadCount}</Badge>
-                  <Button
-                    onClick={handleMarkAllAsRead}
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 whitespace-nowrap"
-                  >
-                    <CheckCheck className="w-4 h-4" />
-                    Mark all as read
-                  </Button>
-                </div>
-              )}
-            </div>
+              Notifications
+            </h1>
+            <p className="text-muted-foreground">
+              {notifications.filter((n) => !n.read).length} unread notification
+              {notifications.filter((n) => !n.read).length !== 1 ? 's' : ''}
+            </p>
           </div>
 
-          <div className="space-y-3">
-            {loading ? (
-              <div className="rounded-lg border border-dashed border-border p-12 text-center">
-                <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-muted-foreground text-lg">Loading notifications...</p>
-              </div>
-            ) : notifications.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-12 text-center">
-                <Bell className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-                <p className="text-muted-foreground text-lg">No notifications yet</p>
-                <p className="text-muted-foreground text-sm mt-1">Check back later for updates</p>
-              </div>
-            ) : (
-              notifications.map((notification) => (
+          {/* Notifications List */}
+          {loading ? (
+            <Card>
+              <CardContent className="pt-8 text-center">
+                <p className="text-muted-foreground">Loading notifications...</p>
+              </CardContent>
+            </Card>
+          ) : notifications.length === 0 ? (
+            <Card>
+              <CardContent className="pt-12 text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="p-4 rounded-full bg-muted">
+                    <Bell className="w-8 h-8 text-muted-foreground" />
+                  </div>
+                </div>
+                <h3 className="text-lg font-semibold mb-2">No notifications yet</h3>
+                <p className="text-muted-foreground">You'll see notifications here when users connect with you or donations are completed.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {notifications.map((notification) => (
                 <Card
                   key={notification.id}
-                  className={`glass soft-shadow cursor-pointer transition-all hover:shadow-md ${
-                    !notification.read 
-                      ? "border-l-4 border-l-primary bg-primary/5" 
-                      : "border-l-4 border-l-transparent"
-                  }`}
+                  className={`transition-all ${!notification.read ? 'border-blue-200 bg-blue-50/50 dark:border-blue-900/50 dark:bg-blue-950/20' : ''}`}
                 >
-                  <CardContent className="p-6">
-                    <div className="flex gap-4">
-                      <div className="flex-shrink-0 p-2 rounded-lg bg-muted/50">{getIcon(notification.type)}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4 mb-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-semibold text-lg">{notification.title}</h3>
-                              {!notification.read && (
-                                <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0" />
-                              )}
-                            </div>
-                            <p className="text-muted-foreground text-sm">{notification.message}</p>
+                  <CardContent className="pt-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-4 flex-1">
+                        {/* Icon */}
+                        <div className="flex-shrink-0 mt-1">{getTypeIcon(notification.type)}</div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-semibold">{notification.senderName}</p>
+                            {getTypeBadge(notification.type)}
+                          </div>
+
+                          <p className="text-sm text-muted-foreground mb-2">{notification.message}</p>
+
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Clock className="w-3 h-3" />
+                            {formatTime(notification.createdAt)}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 mt-3 mb-4">
-                          <Clock className="w-3.5 h-3.5 text-muted-foreground/60" />
-                          <p className="text-xs text-muted-foreground">{notification.timestamp}</p>
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
-                          {notification.actionUrl && (
-                            <Button 
-                              size="sm" 
-                              onClick={() => (window.location.href = notification.actionUrl!)}
-                              className="gap-1"
-                            >
-                              View
-                            </Button>
-                          )}
-                          {!notification.read && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleMarkAsRead(notification.id)}
-                              className="gap-1"
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" />
-                              Mark as read
-                            </Button>
-                          )}
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            onClick={() => handleDelete(notification.id)}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Button
+                          size="sm"
+                          onClick={() => handleViewProfile(notification.senderId)}
+                          className="gap-2 bg-blue-600 hover:bg-blue-700"
+                        >
+                          View Profile
+                          <ArrowRight className="w-4 h-4" />
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(notification.id)}
+                          className="text-muted-foreground hover:text-red-600"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
+
+                    {/* Mark as read indicator */}
+                    {!notification.read && (
+                      <div className="mt-3 pt-3 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleMarkAsRead(notification.id)}
+                          className="gap-2"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          Mark as Read
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </main>
       <Footer />
