@@ -57,21 +57,33 @@ export async function POST(req: NextRequest) {
       reason
     )
 
+    // Ensure request has an `id` property for callers
+    const createdRequest = { ...(request as any), id: request.id || request._id?.toString() }
+
+    let acceptanceResult: any = null
     if (selectedDonorId && selectedDonorEmail && selectedDonorName) {
-      await donorAcceptsRequest(
-        request.id || request._id?.toString() || '',
-        selectedDonorId,
-        selectedDonorEmail,
-        selectedDonorName,
-        city
-      )
+      try {
+        const accepted = await donorAcceptsRequest(
+          String(createdRequest.id),
+          selectedDonorId,
+          selectedDonorEmail,
+          selectedDonorName,
+          city
+        )
+        acceptanceResult = { success: true, accepted: { ...accepted, id: accepted.id || accepted._id?.toString() } }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Donor acceptance failed'
+        acceptanceResult = { success: false, error: msg }
+      }
     }
 
     return NextResponse.json(
       {
         success: true,
-        request,
-        message: 'Blood request created and notifications sent',
+        request: createdRequest,
+        acceptance: acceptanceResult,
+        notification: { requestId: createdRequest.id },
+        message: 'Blood request created; acceptance step processed (if provided)'
       },
       { status: 201 }
     )

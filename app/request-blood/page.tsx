@@ -275,19 +275,26 @@ export default function RequestBloodPage() {
         }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        console.log('[v0] Blood request created:', data)
-        
-        // Show success modal with donor details
-        setSuccessData({
-          donorName: selectedDonor.name,
-          bloodType: formData.bloodGroup,
-          units: parseInt(formData.unitsRequired),
-        })
-        setShowSuccessModal(true)
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Request failed' }))
+        console.error('[v0] Request failed:', err)
+        toast({ title: 'Request failed', description: err?.error || 'Failed to create request', variant: 'destructive' })
+        return
+      }
 
-        // Send notification to all users via notifications API
+      const data = await response.json()
+      console.log('[v0] Blood request created:', data)
+
+      // Show success modal with donor details
+      setSuccessData({
+        donorName: selectedDonor.name,
+        bloodType: formData.bloodGroup,
+        units: parseInt(formData.unitsRequired),
+      })
+      setShowSuccessModal(true)
+
+      // If API returned a notification payload, forward it to notifications service
+      if (data?.notification) {
         await fetch('/api/notifications', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -295,10 +302,10 @@ export default function RequestBloodPage() {
             action: 'add-notification',
             notification: data.notification,
           }),
-        })
-
-        toast({ title: 'Request sent', description: `Request sent to ${selectedDonor.name}. All donors have been notified.`, variant: 'default' })
+        }).catch((e) => console.warn('Failed to forward notification:', e))
       }
+
+      toast({ title: 'Request sent', description: `Request sent to ${selectedDonor.name}. All donors have been notified.`, variant: 'default' })
     } catch (error) {
       console.error('[v0] Error submitting blood request:', error)
       toast({ title: 'Request error', description: 'Error sending request. Please try again.', variant: 'destructive' })

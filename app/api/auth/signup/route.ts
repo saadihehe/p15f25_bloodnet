@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs'
 import { getDbNameForCity } from '@/lib/db-config'
 import { getDb } from '@/lib/mongodb'
 import { mapMongoUserToAppUser } from '@/lib/mappers'
+import { sendOtpEmail } from '@/lib/email'
 import { validateSignupInput } from '@/lib/validation-utils'
 import type { AppRole } from '@/lib/types'
 
@@ -56,8 +57,18 @@ export async function POST(req: NextRequest) {
     const insertResult = await users.insertOne(newUser)
     const createdUser = { _id: insertResult.insertedId, ...newUser }
     const appUser = mapMongoUserToAppUser(createdUser as any)
+    // Generate OTP and send verification email (10 minute expiry)
+    try {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString()
+      const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+      await users.updateOne({ _id: insertResult.insertedId }, { $set: { otpCode: otp, otpExpiresAt, otpVerified: false } })
+      await sendOtpEmail(normalizedEmail, otp, String(name))
+    } catch (e) {
+      // Non-fatal: continue but warn in response
+      console.warn('Failed to send OTP email:', e)
+    }
 
-    return NextResponse.json({ success: true, message: 'Signup successful', user: appUser }, { status: 201 })
+    return NextResponse.json({ success: true, message: 'Signup successful. OTP sent to email', user: appUser }, { status: 201 })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Signup failed'
     return NextResponse.json({ error: message }, { status: 500 })
